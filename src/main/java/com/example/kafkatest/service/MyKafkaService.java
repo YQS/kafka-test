@@ -132,33 +132,45 @@ public class MyKafkaService {
                         return a;
                     },
                     (k, a1, a2) -> {
+                        LOGGER.info("Array1: {}", a1);
+                        LOGGER.info("Array2: {}", a2);
                         return a2;
                     }
                 ).toStream().foreach((k, v) -> LOGGER.info("Key: {}, Value: {}", k, v));
     }
 
     private void streamAppend(StreamsBuilder builder) {
-        final KTable<String, String> kTable =
-            builder
-                .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupBy((k, v) -> k)
-                .reduce((v, v1) -> v + " " + v1, Materialized.as(storeName));
-
-        kTable.toStream().foreach((k, v) -> LOGGER.info("key {}, value {}", k, v));
-
-//        builder.table(topic, Materialized.as(storeName));
+        builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupBy((k, v) -> k)
+            .windowedBy(SessionWindows.with(10000))
+            .aggregate(
+                (Initializer<ArrayList<String>>) ArrayList::new,
+                (k, v, a) -> {
+                    LOGGER.info("Ejecutando 1");
+                    a.add(v);
+                    return a;
+                },
+                (k, a1, a2) -> {
+                    LOGGER.info("Ejecutando 2");
+                    LOGGER.info("Array1: {}", a1);
+                    LOGGER.info("Array2: {}", a2);
+                    return a2;
+                },
+                Materialized.as(storeName)
+            ).toStream().foreach((k, v) -> LOGGER.info("Key: {}, Value: {}", k, v));
     }
 
-    public Map<String, String> queryStore() {
-        ReadOnlyKeyValueStore<String, String> keyValueStore =
-                streams.store(storeName, QueryableStoreTypes.keyValueStore());
+    public Map<String, Object> queryStore() {
+        ReadOnlyKeyValueStore<String, ArrayList<String>> keyValueStore =
+            streams.store(storeName, QueryableStoreTypes.keyValueStore());
 
-        KeyValueIterator<String, String> range = keyValueStore.all();
+        KeyValueIterator<String, ArrayList<String>> range = keyValueStore.all(); //keyValueStore.range(keyInicial, keyFinal)
 
-        Map<String, String> result = new HashMap<>();
+        Map<String, Object> result = new HashMap<>();
 
         while (range.hasNext()) {
-            KeyValue<String, String> next = range.next();
+            KeyValue<String, ArrayList<String>> next = range.next();
             LOGGER.info("CONSUMED KEY VALUE: {}. {}", next.key, next.value);
 
             result.put(next.key, next.value);
