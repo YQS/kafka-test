@@ -14,9 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Properties;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 
 @Service
@@ -31,6 +29,7 @@ public class MyKafkaService {
     private KafkaTemplate<String, String> kafkaTemplate;
 
     private String topic = "pupa";
+    private String storeName = "pupa-query";
 
     private KafkaStreams streams;
 
@@ -99,8 +98,8 @@ public class MyKafkaService {
         final StreamsBuilder builder = new StreamsBuilder();
 
 //        this.streamCountByKey(builder);
-        this.streamNoTransform(builder);
-//        this.streamAppend(builder);
+//        this.streamNoTransform(builder);
+        this.streamAppend(builder);
 
         streams = new KafkaStreams(builder.build(), this.getStreamProperties());
 
@@ -143,44 +142,29 @@ public class MyKafkaService {
             builder
                 .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupBy((k, v) -> k)
-                .reduce((v, v1) -> v + " " + v1);
+                .reduce((v, v1) -> v + " " + v1, Materialized.as(storeName));
 
         kTable.toStream().foreach((k, v) -> LOGGER.info("key {}, value {}", k, v));
 
-//        builder.table("butterfly", Materialized.as("butter-query"));
+//        builder.table(topic, Materialized.as(storeName));
     }
 
-    public void queryStore() {
+    public Map<String, String> queryStore() {
         ReadOnlyKeyValueStore<String, String> keyValueStore =
-                streams.store("butter-query", QueryableStoreTypes.keyValueStore());
+                streams.store(storeName, QueryableStoreTypes.keyValueStore());
 
         KeyValueIterator<String, String> range = keyValueStore.all();
+
+        Map<String, String> result = new HashMap<>();
 
         while (range.hasNext()) {
             KeyValue<String, String> next = range.next();
             LOGGER.info("CONSUMED KEY VALUE: {}. {}", next.key, next.value);
+
+            result.put(next.key, next.value);
         }
 
-//        // Get the key-value store CountsKeyValueStore
-//        ReadOnlyKeyValueStore<String, Long> keyValueStore =
-//                streams.store("CountsKeyValueStore", QueryableStoreTypes.keyValueStore());
-//
-//        // Get value by key
-//        System.out.println("count for hello:" + keyValueStore.get("hello"));
-//
-//        // Get the values for a range of keys available in this application instance
-//        KeyValueIterator<String, Long> range = keyValueStore.range("all", "streams");
-//        while (range.hasNext()) {
-//            KeyValue<String, Long> next = range.next();
-//            System.out.println("count for " + next.key + ": " + value);
-//        }
-//
-//        // Get the values for all of the keys available in this application instance
-//        KeyValueIterator<String, Long> range = keyValueStore.all();
-//        while (range.hasNext()) {
-//            KeyValue<String, Long> next = range.next();
-//            System.out.println("count for " + next.key + ": " + value);
-//        }
+        return result;
     }
 
     private Properties getStreamProperties() {
