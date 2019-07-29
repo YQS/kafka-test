@@ -1,12 +1,14 @@
 package com.example.kafkatest.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.*;
 import org.apache.kafka.streams.kstream.*;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +16,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class MyKafkaService {
@@ -33,6 +37,8 @@ public class MyKafkaService {
 
     private KafkaStreams streams;
 
+    private ObjectMapper objectMapper = new ObjectMapper();
+
 
     public String test() {
         return "test ok";
@@ -40,31 +46,6 @@ public class MyKafkaService {
 
     public void createMessage(String key) {
         kafkaTemplate.send(topic, key, UUID.randomUUID().toString());
-    }
-
-    public void streamPipe() {
-        Properties props = getStreamProperties();
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("pupa").to("butterfly");
-
-        final Topology topology = builder.build();
-
-        LOGGER.info("topology: {}", topology.describe());
-
-        final KafkaStreams streams = new KafkaStreams(topology, props);
-
-        final CountDownLatch latch = new CountDownLatch(1);
-
-        try {
-            streams.start();
-            latch.await();
-        } catch (Throwable ex) {
-            ex.printStackTrace();
-            streams.close();
-            latch.countDown();
-        }
-
     }
 
     public void streamWithTransformation() {
@@ -110,55 +91,55 @@ public class MyKafkaService {
         LOGGER.info("FIN streamWithStore");
     }
 
-    public void streamCountByKey(StreamsBuilder builder) {
-        final KTable<String, Long> kTable =
-            builder
-                .stream(this.topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupBy((k, v) -> k)
-                .count();
-
-        kTable.toStream().foreach((k, v) -> LOGGER.info("Cantidad de elementos con key {}: {}", k, v));
-    }
-
-    private void streamNoTransform(StreamsBuilder builder) {
-            builder
-                .stream(this.topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupBy((k, v) -> k)
-                .windowedBy(SessionWindows.with(10000))
-                .aggregate(
-                    (Initializer<ArrayList<String>>) ArrayList::new,
-                    (k, v, a) -> {
-                        a.add(v);
-                        return a;
-                    },
-                    (k, a1, a2) -> {
-                        LOGGER.info("Array1: {}", a1);
-                        LOGGER.info("Array2: {}", a2);
-                        return a2;
-                    }
-                ).toStream().foreach((k, v) -> LOGGER.info("Key: {}, Value: {}", k, v));
-    }
-
     private void streamAppend(StreamsBuilder builder) {
         builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-            .groupBy((k, v) -> k)
-            .windowedBy(SessionWindows.with(10000))
+            .groupByKey()
+            .windowedBy(SessionWindows.with(TimeUnit.SECONDS.toMillis(10)))
             .aggregate(
-                (Initializer<ArrayList<String>>) ArrayList::new,
+                () -> new String("[]"),
                 (k, v, a) -> {
-                    LOGGER.info("Ejecutando 1");
-                    a.add(v);
-                    return a;
+                    List<String> list = null;
+                    String result = null;
+
+                    try {
+                        list = (List<String>) objectMapper.readValue(a, List.class);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    list.add(v);
+                    try {
+                        result = objectMapper.writeValueAsString(list);
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();
+                    }
+
+                    return result;
                 },
                 (k, a1, a2) -> {
-                    LOGGER.info("Ejecutando 2");
-                    LOGGER.info("Array1: {}", a1);
-                    LOGGER.info("Array2: {}", a2);
-                    return a2;
-                },
-                Materialized.as(storeName)
-            ).toStream().foreach((k, v) -> LOGGER.info("Key: {}, Value: {}", k, v));
+                    List<String> list1 = null;
+                    List<String> list2 = null;
+                    List<String> array = new ArrayList<>();
+                    String result = null;
+
+                    try {
+                        list1 = (List<String>) objectMapper.readValue(a1, List.class);
+                        list2 = (List<String>) objectMapper.readValue(a2, List.class);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    array.addAll(list1);
+                    array.addAll(list2);
+                    try {
+                        result = objectMapper.writeValueAsString(array);
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();
+                    }
+
+                    return result;
+                }
+            )
+            .toStream().foreach((k, v) -> LOGGER.info("Key: {}, Value: {}", k.key(), v));
     }
 
     public Map<String, Object> queryStore() {
