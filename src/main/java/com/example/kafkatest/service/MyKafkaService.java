@@ -7,7 +7,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.*;
 import org.apache.kafka.streams.kstream.*;
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.*;
 import org.apache.kafka.streams.state.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +17,9 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -92,7 +95,7 @@ public class MyKafkaService {
     }
 
     private void streamAppend(StreamsBuilder builder) {
-        builder
+        /*builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(SessionWindows.with(TimeUnit.SECONDS.toMillis(10)))
@@ -139,7 +142,46 @@ public class MyKafkaService {
                     return result;
                 }
             )
-            .toStream().foreach((k, v) -> LOGGER.info("Key: {}, Value: {}", k.key(), v));
+            .toStream().foreach((k, v) -> LOGGER.info("Key: {}, Value: {}", k.key(), v));*/
+
+        builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .aggregate(
+                (Initializer<ArrayList<String>>) ArrayList::new,
+                (k, v, a) -> {
+                    a.add(v);
+                    return a;
+                }
+            )
+            .toStream()
+            .process(() ->
+                new Processor<>() {
+                    private LocalDateTime timestamp;
+
+                    @Override
+                    public void init(ProcessorContext context) {
+                        this.timestamp =
+                            LocalDateTime
+                                .ofInstant(
+                                    Instant.ofEpochMilli(context.timestamp()),
+                                    ZoneOffset.UTC
+                                );
+                        //context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+                    }
+
+                    @Override
+                    public void process(String key, ArrayList<String> value) {
+                        if(LocalDateTime.now().minusSeconds(10).compareTo(this.timestamp) > 0) {
+                            LOGGER.info("KEY: {}, VALUE: {}", key, value);
+                        }
+                    }
+
+                    @Override
+                    public void close() {
+                    }
+                }
+            );
     }
 
     public Map<String, Object> queryStore() {
