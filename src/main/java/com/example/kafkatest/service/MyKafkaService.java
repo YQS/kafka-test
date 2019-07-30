@@ -148,31 +148,54 @@ public class MyKafkaService {
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .aggregate(
-                (Initializer<ArrayList<String>>) ArrayList::new,
-                (k, v, a) -> {
-                    a.add(v);
-                    return a;
-                }
+                    () -> new String("[]"),
+                    (k, v, a) -> {
+                        List<String> list = null;
+                        String result = null;
+
+                        try {
+                            list = (List<String>) objectMapper.readValue(a, List.class);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        list.add(v);
+                        try {
+                            result = objectMapper.writeValueAsString(list);
+                        } catch (JsonProcessingException e) {
+                            e.printStackTrace();
+                        }
+
+                        return result;
+                    },
+                    Materialized.as(storeName)
             )
             .toStream()
             .process(() ->
                 new Processor<>() {
-                    private LocalDateTime timestamp;
+                    private ProcessorContext context;
 
                     @Override
                     public void init(ProcessorContext context) {
-                        this.timestamp =
-                            LocalDateTime
-                                .ofInstant(
-                                    Instant.ofEpochMilli(context.timestamp()),
-                                    ZoneOffset.UTC
-                                );
+                        this.context = context;
+                        //this.timestamp =
+                         //   LocalDateTime
+                          //      .ofInstant(
+                           //         Instant.ofEpochMilli(context.timestamp()),
+                            //        ZoneOffset.UTC
+                             //   );
                         //context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
                     }
 
                     @Override
-                    public void process(String key, ArrayList<String> value) {
-                        if(LocalDateTime.now().minusSeconds(10).compareTo(this.timestamp) > 0) {
+                    public void process(String key, String value) {
+                        LocalDateTime timestamp =
+                                LocalDateTime.ofInstant(
+                                        Instant.ofEpochMilli(this.context.timestamp()),
+                                        ZoneOffset.UTC
+                                );
+
+                        LOGGER.info("comparing to timestamp with value {}", this.context.timestamp());
+                        if(LocalDateTime.now().minusSeconds(10).compareTo(timestamp) > 0) {
                             LOGGER.info("KEY: {}, VALUE: {}", key, value);
                         }
                     }
@@ -185,15 +208,15 @@ public class MyKafkaService {
     }
 
     public Map<String, Object> queryStore() {
-        ReadOnlyKeyValueStore<String, ArrayList<String>> keyValueStore =
+        ReadOnlyKeyValueStore<String, String> keyValueStore =
             streams.store(storeName, QueryableStoreTypes.keyValueStore());
 
-        KeyValueIterator<String, ArrayList<String>> range = keyValueStore.all(); //keyValueStore.range(keyInicial, keyFinal)
+        KeyValueIterator<String, String> range = keyValueStore.all(); //keyValueStore.range(keyInicial, keyFinal)
 
         Map<String, Object> result = new HashMap<>();
 
         while (range.hasNext()) {
-            KeyValue<String, ArrayList<String>> next = range.next();
+            KeyValue<String, String> next = range.next();
             LOGGER.info("CONSUMED KEY VALUE: {}. {}", next.key, next.value);
 
             result.put(next.key, next.value);
