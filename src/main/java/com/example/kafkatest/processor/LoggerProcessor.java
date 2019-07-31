@@ -18,7 +18,6 @@ public class LoggerProcessor implements Processor<String, ArrayList<String>> {
     @Override
     public void init(ProcessorContext context) {
         this.context = context;
-        context.schedule()
     }
 
     @Override
