@@ -51,20 +51,22 @@ public class KafkaStreamConfig {
     }
 
     @Bean
-    public KStream<String, ArrayList<String>> kafkaStream(StreamsBuilder streamsBuilder) {
-        return
-            streamsBuilder
-                .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey()
-                .aggregate(
-                    (Initializer<ArrayList<String>>) ArrayList::new,
-                    (k, v, a) -> {
-                        LOGGER.info("Record en consumer stream: {}", v);
-                        a.add(v);
-                        return a;
-                    },
-                    Materialized.with(Serdes.String(), new JsonSerde<>(ArrayList.class))
-                )
-                .toStream();
+    public KStream<String, String> kafkaStream(StreamsBuilder streamsBuilder) {
+        KStream<String, String> stream = streamsBuilder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
+
+        stream
+            .groupByKey()
+            .aggregate(
+                (Initializer<ArrayList<String>>) ArrayList::new,
+                (k, v, a) -> {
+                    a.add(v);
+                    return a;
+                },
+                Materialized.with(Serdes.String(), new JsonSerde<>(ArrayList.class))
+            )
+            .toStream()
+            .foreach((k, v) -> LOGGER.info("Record en consumer stream: {}", v));
+
+        return stream;
     }
 }
