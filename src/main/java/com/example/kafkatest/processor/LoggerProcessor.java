@@ -28,10 +28,12 @@ public class LoggerProcessor implements Processor<String, ArrayList<String>> {
                 ZoneOffset.UTC
             );
 
-        if(LocalDateTime.now().minusSeconds(10).compareTo(recordTimestamp) > 0) {
-            LOGGER.info("Time difference greater than 10 seconds. Key: {}, Value: {}, Current time: {}, Record time: {}", key, value, this.context.timestamp(), recordTimestamp);
+        LocalDateTime now = LocalDateTime.now();
+
+        if(now.minusSeconds(10).compareTo(recordTimestamp) > 0) {
+            LOGGER.info("Time difference greater than 10 seconds. Key: {}, Value: {}, Current time: {}, Record time: {}", key, value, now, recordTimestamp);
         } else {
-            LOGGER.info("Time difference lesser than or equal to 10 seconds. Key: {}, Value: {}, Current time: {}, Record time: {}", key, value, this.context.timestamp(), recordTimestamp);
+            LOGGER.info("Time difference lesser than or equal to 10 seconds. Key: {}, Value: {}, Current time: {}, Record time: {}", key, value, now, recordTimestamp);
         }
     }
 

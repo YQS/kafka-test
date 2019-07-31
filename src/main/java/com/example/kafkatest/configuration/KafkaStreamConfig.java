@@ -1,5 +1,6 @@
 package com.example.kafkatest.configuration;
 
+import com.example.kafkatest.processor.LoggerProcessor;
 import com.example.kafkatest.service.CustomKafkaConsumer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -9,6 +10,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
+import org.apache.kafka.streams.state.Stores;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +40,9 @@ public class KafkaStreamConfig {
     @Value("${kafka.topic.movement.name}")
     private String topic;
 
+    @Value("${kafka.topic.movement.stream.store}")
+    private String storeName;
+
     @Bean(name = KafkaStreamsDefaultConfiguration.DEFAULT_STREAMS_CONFIG_BEAN_NAME)
     public KafkaStreamsConfiguration streamConfigs() {
         Map<String, Object> props = new HashMap<>();
@@ -57,15 +62,18 @@ public class KafkaStreamConfig {
         stream
             .groupByKey()
             .aggregate(
-                (Initializer<ArrayList<String>>) ArrayList::new,
+                ArrayList::new,
                 (k, v, a) -> {
                     a.add(v);
                     return a;
                 },
-                Materialized.with(Serdes.String(), new JsonSerde<>(ArrayList.class))
+                Materialized
+                    .<String, ArrayList<String>>as(Stores.inMemoryKeyValueStore(storeName))
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(new JsonSerde<>(ArrayList.class))
             )
             .toStream()
-            .foreach((k, v) -> LOGGER.info("Record en consumer stream: {}", v));
+            .process(LoggerProcessor::new);
 
         return stream;
     }
