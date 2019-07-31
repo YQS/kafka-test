@@ -21,6 +21,9 @@ public class CustomKafkaConsumer implements ConsumerSeekAware {
     @Value("${kafka.topic.movement.name}")
     private String topic;
 
+    @Value("${kafka.topic.movement-processing.name}")
+    private String processingTopic;
+
     private final Map<TopicPartition, ConsumerSeekCallback> callbacks = new ConcurrentHashMap<>();
 
     private static final ThreadLocal<ConsumerSeekCallback> callbackForThread = new ThreadLocal<>();

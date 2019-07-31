@@ -18,6 +18,7 @@ public class LoggerProcessor implements Processor<String, ArrayList<String>> {
     @Override
     public void init(ProcessorContext context) {
         this.context = context;
+        context.schedule()
     }
 
     @Override
@@ -28,7 +29,7 @@ public class LoggerProcessor implements Processor<String, ArrayList<String>> {
                 ZoneOffset.UTC
             );
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         if(now.minusSeconds(10).compareTo(recordTimestamp) > 0) {
             LOGGER.info("Time difference greater than 10 seconds. Key: {}, Value: {}, Current time: {}, Record time: {}", key, value, now, recordTimestamp);

@@ -5,10 +5,7 @@ import com.example.kafkatest.service.CustomKafkaConsumer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
 import org.apache.kafka.streams.state.Stores;
 import org.slf4j.Logger;
@@ -40,6 +37,9 @@ public class KafkaStreamConfig {
     @Value("${kafka.topic.movement.name}")
     private String topic;
 
+    @Value("${kafka.topic.movement-processing.name}")
+    private String processingTopic;
+
     @Value("${kafka.topic.movement.stream.store}")
     private String storeName;
 
@@ -56,7 +56,7 @@ public class KafkaStreamConfig {
     }
 
     @Bean
-    public KStream<String, String> kafkaStream(StreamsBuilder streamsBuilder) {
+    public KStream<String, String> kafkaStreamGroupByKey(StreamsBuilder streamsBuilder) {
         KStream<String, String> stream = streamsBuilder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
 
         stream
@@ -73,6 +73,16 @@ public class KafkaStreamConfig {
                     .withValueSerde(new JsonSerde<>(ArrayList.class))
             )
             .toStream()
+            .to(processingTopic, Produced.with(Serdes.String(), new JsonSerde<>(ArrayList.class)));
+
+        return stream;
+    }
+
+    @Bean
+    public KStream<String, ArrayList<String>> kafkaStreamProcess(StreamsBuilder streamsBuilder) {
+        KStream<String, ArrayList<String>> stream = streamsBuilder.stream(processingTopic, Consumed.with(Serdes.String(), new JsonSerde<>(ArrayList.class)));
+
+        stream
             .process(LoggerProcessor::new);
 
         return stream;
