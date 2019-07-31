@@ -9,6 +9,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.listener.ConsumerSeekAware;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -39,8 +40,8 @@ public class CustomKafkaConsumer implements ConsumerSeekAware {
     }
 
     @KafkaListener(id = "kafka-test-normal-consumer", topics = "${kafka.topic.movement.name}", concurrency = "3")
-    public void listen(ConsumerRecord<String, String> record) {
-        LOGGER.info("Record en consumer normal: {}", record);
+    public void listen(List<ConsumerRecord<Integer, String>> value) {
+        LOGGER.info("Record en consumer normal: {}", value);
     }
 
     public void seekToStart() {

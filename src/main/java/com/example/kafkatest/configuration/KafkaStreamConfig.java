@@ -18,9 +18,11 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.annotation.EnableKafkaStreams;
 import org.springframework.kafka.annotation.KafkaStreamsDefaultConfiguration;
 import org.springframework.kafka.config.KafkaStreamsConfiguration;
+import org.springframework.kafka.support.serializer.JsonSerde;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 
@@ -61,7 +63,7 @@ public class KafkaStreamConfig {
                         a.add(v);
                         return a;
                     },
-                    Materialized.as("Cashout_Grouped_By_Key")
+                    Materialized.with(Serdes.String(), new JsonSerde<>(ArrayList.class))
                 )
                 .toStream();
     }
