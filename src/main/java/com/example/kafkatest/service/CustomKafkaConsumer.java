@@ -53,10 +53,10 @@ public class CustomKafkaConsumer implements ConsumerSeekAware {
         LOGGER.info("Record en consumer normal topic movement: {}", value);
     }*/
 
-    @KafkaListener(id = "kafka-test-normal-consumer-movement-processing", topics = "${kafka.topic.movement-processing.name}", concurrency = "3")
+    /*@KafkaListener(id = "kafka-test-normal-consumer-movement-processing", topics = "${kafka.topic.movement-processing.name}", concurrency = "3")
     public void listenMovementProcessing(@Payload List<ArrayList<String>> values, @Header(KafkaHeaders.RECEIVED_MESSAGE_KEY) List<String> keys, @Header(KafkaHeaders.RECEIVED_TIMESTAMP) List<Long> ts) {
         LOGGER.info("Record en consumer normal topic movement processing: {}", values);
-    }
+    }*/
 
     public void seekToStart() {
         this.callbacks.forEach((topicPartition, callback) -> callback.seekToBeginning(topicPartition.topic(), topicPartition.partition()));

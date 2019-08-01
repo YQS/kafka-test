@@ -12,9 +12,6 @@ public class StreamManagement {
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
 
-    @Value("${kafka.topic.movement.stream.store}")
-    private String storeName;
-
     /*public Map<String, Object> queryStore() {
         ReadOnlyKeyValueStore<String, String> keyValueStore =
             streams.store(storeName, QueryableStoreTypes.keyValueStore());

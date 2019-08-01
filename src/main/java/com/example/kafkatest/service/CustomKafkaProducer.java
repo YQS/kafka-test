@@ -1,10 +1,14 @@
 package com.example.kafkatest.service;
 
+import com.example.kafkatest.model.Event;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -20,9 +24,14 @@ public class CustomKafkaProducer {
     private String topic;
 
     @Autowired
-    private KafkaTemplate<String, String> kafkaTemplate;
+    private KafkaTemplate<String, Event> kafkaTemplate;
 
     public void createMessage(String key) {
-        kafkaTemplate.send(topic, key, UUID.randomUUID().toString());
+//        Message<Event> message =
+//            MessageBuilder
+//                .withPayload(new Event().withId(UUID.randomUUID().toString()).withValue(UUID.randomUUID().toString()))
+//                .setHeader(KafkaHeaders.TOPIC, topic)
+//                .build();
+        kafkaTemplate.send(topic, key, new Event().withId(UUID.randomUUID().toString()).withValue(UUID.randomUUID().toString()));
     }
 }
