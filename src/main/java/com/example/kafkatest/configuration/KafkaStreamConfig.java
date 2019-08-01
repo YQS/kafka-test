@@ -62,6 +62,7 @@ public class KafkaStreamConfig {
     }
 
     @Bean
+    @SuppressWarnings("all")
     public KStream<String, Event> kafkaStreamSendToAnotherTopic(StreamsBuilder streamsBuilder) {
         KStream<String, Event> stream = streamsBuilder.stream(topic, Consumed.with(Serdes.String(), new JsonSerde<>(Event.class)));
 
@@ -71,24 +72,20 @@ public class KafkaStreamConfig {
                 .aggregate(
                     EventList::new,
                     (k, v, a) -> a.add(v),
-                    Materialized
-                        .<String, EventList>as(Stores.inMemoryKeyValueStore(this.aggregationStoreName))
-                        .withKeySerde(Serdes.String())
-                        .withValueSerde(new JsonSerde<>(EventList.class))
+                    Materialized.with(Serdes.String(), new JsonSerde<>(EventList.class))
                 )
                 .toStream()
                 .groupByKey()
-                .reduce((v1, v2) -> {
-                    if(v1.size() < v2.size()) {
-                        return v2;
-                    } else {
-                        return v1;
-                    }
-                },
-                Materialized
-                    .<String, EventList>as(Stores.inMemoryKeyValueStore(this.reduceStoreName))
-                    .withKeySerde(Serdes.String())
-                    .withValueSerde(new JsonSerde<>(EventList.class)))
+                .reduce(
+                    (v1, v2) -> {
+                        if(v1.size() < v2.size()) {
+                            return v2;
+                        } else {
+                            return v1;
+                        }
+                    },
+                    Materialized.with(Serdes.String(), new JsonSerde<>(EventList.class))
+                )
                 .toStream()
                 .branch((k, v) -> LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10).compareTo(v.getTimestamp()) > 0, (k, v) -> LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10).compareTo(v.getTimestamp()) <= 0);
 
@@ -97,88 +94,4 @@ public class KafkaStreamConfig {
 
         return stream;
     }
-
-    /*@Bean
-    public KStream<String, ArrayList<Event>> kafkaStreamProcessFromTheOtherTopic(StreamsBuilder streamsBuilder) {
-        KStream<String, ArrayList<Event>> stream = streamsBuilder.stream(processingTopic, Consumed.with(Serdes.String(), new JsonSerde<>(ArrayList.class)));
-
-        stream
-            .process(LoggerProcessorOtherTopic::new);
-
-        return stream;
-    }*/
-
-    /*@Bean
-    public KStream<String, String> kafkaStreamProcessWithPunctuation(StreamsBuilder streamsBuilder) {
-        KStream<String, String> stream = streamsBuilder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
-
-        stream
-            .groupByKey()
-            .aggregate(
-                ArrayList::new,
-                (k, v, a) -> {
-                    a.add(v);
-                    return a;
-                },
-                Materialized
-                    .<String, ArrayList<String>>as(Stores.inMemoryKeyValueStore(this.storeName))
-                    .withKeySerde(Serdes.String())
-                    .withValueSerde(new JsonSerde<>(ArrayList.class))
-            )
-            .toStream()
-            .process(LoggerProcessorWithPunctuation::new);
-
-
-        return stream;
-    }
-
-    @Bean
-    public KStream<String, String> kafkaStreamPublishToStore(StreamsBuilder streamsBuilder) {
-        KStream<String, String> stream = streamsBuilder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
-
-        stream
-            .groupByKey()
-            .aggregate(
-                ArrayList::new,
-                (k, v, a) -> {
-                    a.add(v);
-                    return a;
-                },
-                Materialized
-                    .<String, ArrayList<String>>as(Stores.inMemoryKeyValueStore(this.storeName))
-                    .withKeySerde(Serdes.String())
-                    .withValueSerde(new JsonSerde<>(ArrayList.class))
-            );
-
-
-        return stream;
-    }
-
-    @Bean
-    public KStream<String, String> kafkaStreamSuppressWindow(StreamsBuilder streamsBuilder) {
-        KStream<String, String> stream = streamsBuilder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
-
-        stream
-            .groupByKey()
-            .windowedBy(SessionWindows.with(Duration.ofSeconds(10)).grace(Duration.ZERO))
-            .aggregate(
-                (Initializer<ArrayList<String>>) ArrayList::new,
-                (k, v, a) -> {
-                    a.add(v);
-                    return a;
-                },
-                (k, a1, a2) -> {
-                    ArrayList<String> mergedArrayList = new ArrayList<>();
-                    mergedArrayList.addAll(a1);
-                    mergedArrayList.addAll(a2);
-                    return mergedArrayList;
-                },
-                Materialized.with(Serdes.String(), new JsonSerde<>(ArrayList.class))
-            )
-            .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
-            .toStream()
-            .foreach((k, v) -> LOGGER.info("Record en consumer stream con suppression. Key: {}, Value: {}", k, v));
-
-        return stream;
-    }*/
 }
