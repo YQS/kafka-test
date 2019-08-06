@@ -2,14 +2,12 @@ package com.example.kafkatest.configuration;
 
 import com.example.kafkatest.model.Event;
 import com.example.kafkatest.model.EventList;
-import com.example.kafkatest.processor.LoggerProcessorOtherTopic;
 import com.example.kafkatest.service.CustomKafkaConsumer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
-import org.apache.kafka.streams.state.Stores;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,7 +21,6 @@ import org.springframework.kafka.support.serializer.JsonSerde;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -38,10 +35,13 @@ public class KafkaStreamConfig {
     private String bootstrapServers;
 
     @Value("${kafka.topic.movement.name}")
-    private String topic;
+    private String movementTopic;
 
     @Value("${kafka.topic.movement-processing.name}")
     private String processingTopic;
+
+    @Value("${kafka.topic.movement-grouped.name}")
+    private String groupedTopic;
 
     @Value("${kafka.topic.movement.stream.store.aggregate}")
     private String aggregationStoreName;
@@ -63,10 +63,10 @@ public class KafkaStreamConfig {
 
     @Bean
     @SuppressWarnings("all")
-    public KStream<String, Event> kafkaStreamSendToAnotherTopic(StreamsBuilder streamsBuilder) {
-        KStream<String, Event> stream = streamsBuilder.stream(topic, Consumed.with(Serdes.String(), new JsonSerde<>(Event.class)));
+    public KStream<String, Event> kafkaStreamSendToProcessingTopic(StreamsBuilder streamsBuilder) {
+        KStream<String, Event> stream = streamsBuilder.stream(movementTopic, Consumed.with(Serdes.String(), new JsonSerde<>(Event.class)));
 
-        KStream<String, EventList>[] streamArray =
+        KStream<String, EventList> streamArray =
             stream
                 .groupByKey()
                 .aggregate(
@@ -74,7 +74,20 @@ public class KafkaStreamConfig {
                     (k, v, a) -> a.add(v),
                     Materialized.with(Serdes.String(), new JsonSerde<>(EventList.class))
                 )
-                .toStream()
+                .toStream();
+
+        streamArray.to(processingTopic, Produced.with(Serdes.String(), new JsonSerde<>(EventList.class)));
+
+        return stream;
+    }
+
+    @Bean
+    @SuppressWarnings("all")
+    public KStream<String, EventList> kafkaStreamSendToGroupedTopic(StreamsBuilder streamsBuilder) {
+        KStream<String, EventList> stream = streamsBuilder.stream(processingTopic, Consumed.with(Serdes.String(), new JsonSerde<>(EventList.class)));
+
+        KStream<String, EventList>[] streamArray =
+            stream
                 .groupByKey()
                 .reduce(
                     (v1, v2) -> {
@@ -89,7 +102,7 @@ public class KafkaStreamConfig {
                 .toStream()
                 .branch((k, v) -> LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10).compareTo(v.getTimestamp()) > 0, (k, v) -> LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10).compareTo(v.getTimestamp()) <= 0);
 
-        streamArray[0].foreach((k, v) -> LOGGER.info("Record en consumer stream con suppression. Key: {}, Value: {}", k, v));
+        streamArray[0].to(groupedTopic, Produced.with(Serdes.String(), new JsonSerde<>(EventList.class)));
         streamArray[1].to(processingTopic, Produced.with(Serdes.String(), new JsonSerde<>(EventList.class)));
 
         return stream;
